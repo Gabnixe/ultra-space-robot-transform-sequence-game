@@ -15,6 +15,7 @@
     #include <emscripten/emscripten.h>      // Emscripten library
 #endif
 
+#include <math.h>                           // Required for: sqrtf()
 #include <stdio.h>                          // Required for: printf()
 #include <stdlib.h>                         // Required for: 
 #include <string.h>                         // Required for:
@@ -41,6 +42,11 @@ typedef enum {
     SCREEN_ENDING
 } GameScreen;
 
+// https://www.redblobgames.com/grids/hexagons/#coordinates-cube
+typedef struct {
+    Vector2 pos;
+} Hex;
+
 // TODO: Define your custom data types here
 
 //----------------------------------------------------------------------------------
@@ -52,12 +58,28 @@ static const int screenHeight = 720;
 static RenderTexture2D target = { 0 };  // Render texture to render our game
 static int frameCounter = 0;
 
+static const int hexRadius = 32;
+static const int hexWidth = 55;
+static const int hexHeigth = 64;
+
+static const int hexMapCenter = 3;
+static const int hexQs = 7;
+static const int hexRs = 7;
+static const int hexSs = 7;
+
 // TODO: Define global variables here, recommended to make them static
+
+static Hex ***hexMap;
+static Texture2D hexSprite;
+static Rectangle hexRec;
 
 //----------------------------------------------------------------------------------
 // Module Functions Declaration
 //----------------------------------------------------------------------------------
 static void UpdateDrawFrame(void);      // Update and Draw one frame
+static void SetupHexMap();
+static void DrawHexMap();
+static void ClearHexMap();
 
 //------------------------------------------------------------------------------------
 // Program main entry point
@@ -73,6 +95,10 @@ int main(void)
     InitWindow(screenWidth, screenHeight, "raylib gamejam template");
     
     // TODO: Load resources / Initialize variables at this point
+    hexSprite = LoadTexture("D:\\GameDev\\RayLibJam\\ultra-space-robot-transform-sequence-game\\src\\resources\\HexTile.png");
+    hexRec.width = hexWidth;
+    hexRec.height = hexHeigth;
+    SetupHexMap();
     
     // Render texture to draw, enables screen scaling
     // NOTE: If screen is scaled, mouse input should be scaled proportionally
@@ -83,6 +109,7 @@ int main(void)
     emscripten_set_main_loop(UpdateDrawFrame, 60, 1);
 #else
     SetTargetFPS(60);     // Set our game frames-per-second
+
     //--------------------------------------------------------------------------------------
 
     // Main game loop
@@ -95,6 +122,8 @@ int main(void)
     // De-Initialization
     //--------------------------------------------------------------------------------------
     UnloadRenderTexture(target);
+    UnloadTexture(hexSprite);
+    ClearHexMap();
     
     // TODO: Unload all loaded resources at this point
 
@@ -124,18 +153,7 @@ void UpdateDrawFrame(void)
     BeginTextureMode(target);
         ClearBackground(RAYWHITE);
         
-        // TODO: Draw your game screen here
-
-        DrawRectangle(70, 90, 200, 200, BLACK);
-        DrawRectangle(70 + 16, 90 + 16, 200 - 32, 200 - 32, RAYWHITE);
-        DrawText("raylib", 70 + 200 - MeasureText("raylib", 40) - 32, 90 + 200 - 40 - 24, 40, BLACK);
-
-        DrawText("6.x", 290, 90 - 26, 280, BLACK);
-        DrawText("GAMEJAM", 70, 90 + 210, 120, MAROON);
-
-        if ((frameCounter/20)%2) DrawText("are you ready?", 160, 500, 50, BLACK);
-        
-        DrawRectangleLinesEx((Rectangle){ 0, 0, screenWidth, screenHeight }, 16, BLACK);
+        DrawHexMap();
         
     EndTextureMode();
     
@@ -151,4 +169,59 @@ void UpdateDrawFrame(void)
 
     EndDrawing();
     //----------------------------------------------------------------------------------  
+}
+
+void SetupHexMap()
+{
+    hexMap = (Hex**)MemAlloc(hexQs * sizeof(Hex*));
+
+    for (int q = 0; q < hexQs; q++) {
+        hexMap[q] = (Hex*)MemAlloc(hexRs * sizeof(Hex));
+
+        for (int r = 0; r < hexRs; r++) {
+            hexMap[q][r] = (Hex**)MemAlloc(hexSs * sizeof(Hex));
+        }
+    }
+
+    float horizontalSpacing = 0.48 * hexWidth;
+    float verticalSpacing = 0.71 * hexHeigth;
+    for (int q = 0; q < hexQs; q++) {
+        for (int r = 0; r < hexRs; r++) {
+            for (int s = 0; s < hexSs; s++) {
+                Vector2 pos = { (s - q) * horizontalSpacing, r * verticalSpacing};
+                hexMap[q][r][s].pos = pos;
+            }
+        }
+    }
+}
+
+void DrawHexMap()
+{
+    for (int q = 0; q < hexQs; q++) {
+        for (int r = 0; r < hexRs; r++) {
+            for (int s = 0; s < hexSs; s++) {
+                if (q != 0 && q == r && r == s)
+                    continue;
+
+                if ((q + r + s) % 2 != 0)
+                    continue;
+
+                Vector2 pos = hexMap[q][r][s].pos;
+                DrawTextureRec(hexSprite, hexRec, pos, WHITE);
+            }
+        }
+    }
+}
+
+void ClearHexMap()
+{
+    for (int q = 0; q < hexQs; q++) {
+        for (int r = 0; r < hexRs; r++) {
+            MemFree(hexMap[q][r]);
+        }
+
+        MemFree(hexMap[q]);
+    }
+
+    MemFree(hexMap);
 }
